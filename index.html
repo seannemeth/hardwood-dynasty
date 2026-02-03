@@ -27,7 +27,7 @@
         .btn-sm { padding: 5px 10px; width: auto; font-size: 0.8em; margin-right: 5px; }
         .btn-green { background: #4caf50; color: white; }
         .btn-blue { background: #2196F3; color: white; }
-        .btn-red { background: #f44336; color: white; } /* For Scout */
+        .btn-red { background: #f44336; color: white; } 
 
         /* TABLES */
         table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
@@ -58,7 +58,7 @@
 <div class="container">
     <div class="header">
         <h1>Dynasty Intercollegiate Conference</h1>
-        <div class="sub-header">EST. 2026 | Week <span id="week-display">1</span></div>
+        <div class="sub-header">Year <span id="year-display">2026</span> | Week <span id="week-display">1</span></div>
         <div id="status-bar" style="margin-top: 15px; font-weight: bold;">
             <span id="user-team">Loading...</span> | 
             <span id="user-budget" style="color: #4caf50">...</span>
@@ -70,8 +70,8 @@
             <div class="card">
                 <h3>Head Coach Office</h3>
                 <p id="coach-info">Coach: You (Lvl 1)</p>
-                <button class="btn" onclick="simWeek()">Simulate Week (Advance Time)</button>
-                <button class="btn btn-green" onclick="openRecruiting()">📞 Recruiting Board</button>
+                <button id="sim-btn" class="btn" onclick="simWeek()">Simulate Week (Advance Time)</button>
+                <button id="recruit-btn" class="btn btn-green" onclick="openRecruiting()">📞 Recruiting Board</button>
             </div>
 
             <div class="card" style="margin-top: 20px;">
@@ -103,15 +103,14 @@
         <h2 style="color: #d4af37; border-bottom: 2px solid #444; padding-bottom: 10px;">Recruiting Class (Week <span id="modal-week">1</span>)</h2>
         <div style="background: #333; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
             Your Budget: <span id="modal-budget" style="color: #4caf50; font-weight: bold;">...</span> <br>
-            <span style="font-size: 0.8em; color: #aaa;">Interest decays every week you simulate! Get them to 100% to sign.</span>
+            <span style="font-size: 0.8em; color: #aaa;">Regular Season ends at Week 12! Sign players before then.</span>
         </div>
-        <div id="recruits-list">
-            </div>
+        <div id="recruits-list"></div>
     </div>
 </div>
 
 <script>
-    /* --- GAME ENGINE V1.3 --- */
+    /* --- GAME ENGINE V1.4 (DYNASTY CYCLE) --- */
 
     // CONFIGURATION
     const SCHOOL_NAMES = [
@@ -125,7 +124,9 @@
     let league = [];
     let recruits = [];
     let currentWeek = 1;
-    let userTeamIndex = 10; // Default to Dayton equivalent
+    let currentYear = 2026;
+    let userTeamIndex = 10; 
+    let seasonActive = true;
 
     // DATA GENERATORS
     function generatePlayer(grade, position) {
@@ -135,7 +136,8 @@
             name: `${['J', 'M', 'T', 'D', 'K'][Math.floor(Math.random()*5)]}. ${['Smith', 'Johnson', 'Williams', 'Brown', 'Jones'][Math.floor(Math.random()*5)]}`,
             position: position,
             grade: grade,
-            overall: overall
+            overall: overall,
+            potential: potential
         };
     }
 
@@ -144,24 +146,15 @@
         for(let i=0; i<13; i++) roster.push(generatePlayer(['Fr', 'So', 'Jr', 'Sr'][Math.floor(Math.random() * 4)], POSITIONS[i % 5]));
         roster.sort((a,b) => b.overall - a.overall);
 
-        // Budget: High tier = more money
         let budget = tier === 1 ? 500000 : (tier === 2 ? 250000 : 75000);
         
-        return {
-            name: name,
-            tier: tier, 
-            budget: budget,
-            wins: 0,
-            losses: 0,
-            roster: roster
-        };
+        return { name: name, tier: tier, budget: budget, wins: 0, losses: 0, roster: roster };
     }
 
-    // RECRUIT GENERATOR
     function generateRecruitingClass() {
         recruits = [];
-        for(let i=0; i<20; i++) {
-            let stars = Math.floor(Math.random() * 3) + 3; // 3 to 5 stars
+        for(let i=0; i<25; i++) {
+            let stars = Math.floor(Math.random() * 3) + 3; 
             let rating = stars === 5 ? 90 + Math.floor(Math.random()*9) : (stars === 4 ? 80 + Math.floor(Math.random()*9) : 70 + Math.floor(Math.random()*9));
             
             recruits.push({
@@ -170,9 +163,10 @@
                 position: POSITIONS[Math.floor(Math.random() * 5)],
                 stars: stars,
                 rating: rating,
-                interest: Math.floor(Math.random() * 20), // Start with 0-20% interest
+                interest: Math.floor(Math.random() * 20), 
                 scouted: false,
-                signed: false
+                signed: false,
+                teamSigned: null
             });
         }
         recruits.sort((a,b) => b.stars - a.stars);
@@ -192,6 +186,11 @@
 
     // SIMULATION
     function simWeek() {
+        if(!seasonActive) {
+            runOffseason();
+            return;
+        }
+
         currentWeek++;
         document.getElementById('week-display').innerText = currentWeek;
 
@@ -205,43 +204,125 @@
             else team.losses++;
         });
 
-        // Recruit Decay Logic (The "Rival" Simulation)
+        // Recruit Decay
         recruits.forEach(r => {
             if(!r.signed) {
-                // Lose 2-5% interest per week if not signed (simulating other teams)
                 r.interest -= Math.floor(Math.random() * 4) + 1;
                 if(r.interest < 0) r.interest = 0;
             }
         });
 
         league.sort((a,b) => b.wins - a.wins);
+
+        // END OF SEASON CHECK
+        if(currentWeek > 12) {
+            seasonActive = false;
+            let champion = league[0].name;
+            alert(`SEASON OVER! \n\n🏆 CONFERENCE CHAMPION: ${champion} 🏆\n\nClick 'Simulate' to start the Offseason.`);
+            document.getElementById('sim-btn').innerText = "Start Offseason (Graduate Seniors)";
+            document.getElementById('sim-btn').style.background = "#2196F3";
+            document.getElementById('recruit-btn').style.display = 'none';
+        }
+
         updateUI();
     }
 
-    // RECRUITING ACTIONS
+    // OFFSEASON LOGIC
+    function runOffseason() {
+        let log = "OFFSEASON REPORT:\n";
+        
+        // 1. Process Every Team
+        league.forEach(team => {
+            let seniorsLost = 0;
+            let newRoster = [];
+            let gained = 0;
+
+            // Remove Seniors & Develop Players
+            team.roster.forEach(p => {
+                if(p.grade === 'Sr') {
+                    seniorsLost++;
+                } else {
+                    // Age Up
+                    if(p.grade === 'Jr') p.grade = 'Sr';
+                    else if(p.grade === 'So') p.grade = 'Jr';
+                    else if(p.grade === 'Fr') p.grade = 'So';
+                    
+                    // Development (Random growth based on potential)
+                    let growth = Math.floor(Math.random() * 5); // 0 to 4 growth
+                    if(p.overall + growth > p.potential) growth = 0; // Cap at potential
+                    p.overall += growth;
+                    newRoster.push(p);
+                }
+            });
+
+            // Add Signed Recruits (User Team Only for now in this version)
+            if(team.name === SCHOOL_NAMES[userTeamIndex]) {
+                recruits.forEach(r => {
+                    if(r.signed) {
+                        newRoster.push({
+                            name: r.name,
+                            position: r.position,
+                            grade: 'Fr',
+                            overall: r.rating,
+                            potential: r.rating + Math.floor(Math.random() * 15)
+                        });
+                        gained++;
+                    }
+                });
+                log += `You lost ${seniorsLost} Seniors. You added ${gained} Freshmen from recruiting.\n`;
+            } else {
+                // Auto-fill AI teams to keep roster size at 13
+                while(newRoster.length < 13) {
+                     newRoster.push(generatePlayer('Fr', POSITIONS[Math.floor(Math.random()*5)]));
+                }
+            }
+
+            team.roster = newRoster;
+            team.roster.sort((a,b) => b.overall - a.overall);
+            
+            // Reset Stats
+            team.wins = 0;
+            team.losses = 0;
+            
+            // Reset Budget
+            team.budget += 50000; // Small annual budget increase
+        });
+
+        // 2. Reset World
+        currentYear++;
+        currentWeek = 1;
+        seasonActive = true;
+        generateRecruitingClass(); // New crop of HS players
+        
+        document.getElementById('year-display').innerText = currentYear;
+        document.getElementById('week-display').innerText = currentWeek;
+        document.getElementById('sim-btn').innerText = "Simulate Week (Advance Time)";
+        document.getElementById('sim-btn').style.background = "#d4af37";
+        document.getElementById('recruit-btn').style.display = 'inline-block';
+
+        alert(log + `\nWelcome to the ${currentYear} Season!`);
+        updateUI();
+    }
+
+    // RECRUITING ACTIONS (Unchanged)
     function recruitAction(id, actionType) {
         let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
         let recruit = recruits.find(r => r.id === id);
-        let cost = 0;
-        let interestGain = 0;
+        let cost = 0; let interestGain = 0;
 
-        // Config
         if(actionType === 'scout') { cost = 1000; }
         if(actionType === 'call') { cost = 500; interestGain = 5; }
         if(actionType === 'visit') { cost = 5000; interestGain = 15; }
 
         if(userTeam.budget >= cost) {
             userTeam.budget -= cost;
-            
             if(actionType === 'scout') {
                 recruit.scouted = true;
-                alert(`Scouting Report: ${recruit.name} is a ${recruit.rating} Overall!`);
+                alert(`Report: ${recruit.name} is a ${recruit.rating} Overall!`);
             } else {
-                // Add Interest
                 recruit.interest += interestGain;
                 if(recruit.interest > 100) recruit.interest = 100;
             }
-            
             renderRecruits();
             updateUI();
         } else {
@@ -252,20 +333,12 @@
     function signPlayer(id) {
         let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
         let recruit = recruits.find(r => r.id === id);
-
         if(recruit.interest >= 100) {
             recruit.signed = true;
-            userTeam.roster.push({
-                name: recruit.name,
-                position: recruit.position,
-                grade: 'Fr',
-                overall: recruit.rating
-            });
-            alert(`${recruit.name} has committed to your school!`);
+            alert(`${recruit.name} signed! They will join next season.`);
             renderRecruits();
-            updateUI();
         } else {
-            alert("Interest not high enough! Get to 100% first.");
+            alert("Interest not high enough!");
         }
     }
 
@@ -275,48 +348,34 @@
         document.getElementById('modal-week').innerText = currentWeek;
         renderRecruits();
     }
-
-    function closeRecruiting() {
-        document.getElementById('recruiting-modal').style.display = 'none';
-        updateUI();
-    }
+    function closeRecruiting() { document.getElementById('recruiting-modal').style.display = 'none'; updateUI(); }
 
     function renderRecruits() {
         let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
         document.getElementById('modal-budget').innerText = `$${userTeam.budget.toLocaleString()}`;
-        
         let list = document.getElementById('recruits-list');
         list.innerHTML = '';
-
         recruits.forEach(r => {
             if(r.signed) return; 
-
             let starsDisplay = "★".repeat(r.stars);
             let ratingDisplay = r.scouted ? `<span style="color:#d4af37; font-weight:bold;">${r.rating} OVR</span>` : `<span style="color:#777;">?? OVR</span>`;
-            
-            // Color code the progress bar
             let barColor = r.interest > 80 ? '#4caf50' : (r.interest > 40 ? '#ff9800' : '#f44336');
-            
             let html = `
             <div class="recruit-row">
                 <div class="recruit-info">
                     <div style="font-weight:bold; font-size: 1.1em;">${r.name} <span class="stars">${starsDisplay}</span></div>
                     <div>${r.position} | ${ratingDisplay}</div>
-                    <div class="progress-container">
-                        <div class="progress-bar" style="width: ${r.interest}%; background-color: ${barColor};"></div>
-                    </div>
-                    <div style="font-size:0.8em; margin-top:2px;">Interest: ${r.interest}%</div>
+                    <div class="progress-container"><div class="progress-bar" style="width: ${r.interest}%; background-color: ${barColor};"></div></div>
                 </div>
                 <div class="recruit-actions">
-                    ${!r.scouted ? `<button class="btn btn-sm btn-red" onclick="recruitAction(${r.id}, 'scout')">Scout ($1k)</button>` : ''}
-                    <button class="btn btn-sm btn-blue" onclick="recruitAction(${r.id}, 'call')">Call ($500)</button>
-                    <button class="btn btn-sm" onclick="recruitAction(${r.id}, 'visit')">Visit ($5k)</button>
+                    ${!r.scouted ? `<button class="btn btn-sm btn-red" onclick="recruitAction(${r.id}, 'scout')">Scout $1k</button>` : ''}
+                    <button class="btn btn-sm btn-blue" onclick="recruitAction(${r.id}, 'call')">Call $500</button>
+                    <button class="btn btn-sm" onclick="recruitAction(${r.id}, 'visit')">Visit $5k</button>
                     ${r.interest >= 100 ? `<button class="btn btn-sm btn-green" onclick="signPlayer(${r.id})">SIGN!</button>` : ''}
                 </div>
             </div>`;
             list.innerHTML += html;
         });
-        
         if(list.innerHTML === '') list.innerHTML = '<p style="text-align:center;">No recruits remaining.</p>';
     }
 
@@ -324,30 +383,18 @@
         let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
         document.getElementById('user-team').innerText = userTeam.name;
         document.getElementById('user-budget').innerText = `$${userTeam.budget.toLocaleString()}`;
-
         const stdBody = document.getElementById('standings-body');
         stdBody.innerHTML = '';
         league.forEach((team, index) => {
-            let row = `<tr>
-                <td class="rank-num">${index + 1}</td>
-                <td>${team.name}</td>
-                <td>${team.tier === 1 ? 'High' : (team.tier === 2 ? 'Mid' : 'Low')}</td>
-                <td>${team.wins}-${team.losses}</td>
-            </tr>`;
+            let row = `<tr><td class="rank-num">${index + 1}</td><td>${team.name}</td><td>${team.tier===1?'High':(team.tier===2?'Mid':'Low')}</td><td>${team.wins}-${team.losses}</td></tr>`;
             stdBody.innerHTML += row;
         });
-
         const rostBody = document.getElementById('roster-body');
         rostBody.innerHTML = '';
         userTeam.roster.sort((a,b) => b.overall - a.overall); 
         userTeam.roster.forEach(p => {
             let ratingClass = p.overall > 80 ? 'rating-high' : 'rating-low';
-            let row = `<tr>
-                <td>${p.position}</td>
-                <td>${p.name}</td>
-                <td>${p.grade}</td>
-                <td class="${ratingClass}">${p.overall}</td>
-            </tr>`;
+            let row = `<tr><td>${p.position}</td><td>${p.name}</td><td>${p.grade}</td><td class="${ratingClass}">${p.overall}</td></tr>`;
             rostBody.innerHTML += row;
         });
     }
