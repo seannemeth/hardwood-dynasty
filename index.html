@@ -24,28 +24,33 @@
         /* BUTTONS */
         .btn { background: #d4af37; color: #111; width: 100%; padding: 12px; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; font-family: inherit;}
         .btn:hover { background: #fff; }
+        .btn-sm { padding: 5px 10px; width: auto; font-size: 0.8em; margin-right: 5px; }
         .btn-green { background: #4caf50; color: white; }
-        .btn-red { background: #f44336; color: white; }
+        .btn-blue { background: #2196F3; color: white; }
+        .btn-red { background: #f44336; color: white; } /* For Scout */
 
         /* TABLES */
         table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
         th { text-align: left; color: #888; border-bottom: 1px solid #555; padding: 5px; }
         td { padding: 6px 5px; border-bottom: 1px solid #333; }
         .rank-num { color: #d4af37; font-weight: bold; }
-        .rating-high { color: #d4af37; } /* Gold for good ratings */
-        
-        /* MODAL (The Popup Screen) */
-        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); }
-        .modal-content { background-color: #222; margin: 5% auto; padding: 20px; border: 1px solid #d4af37; width: 90%; max-width: 800px; height: 80%; overflow-y: auto; }
-        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
-        .close:hover { color: #fff; }
+        .rating-high { color: #d4af37; } 
 
-        /* RECRUIT LIST */
-        .recruit-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #444; }
-        .recruit-info { flex-grow: 1; }
-        .stars { color: #ffd700; }
+        /* PROGRESS BAR */
+        .progress-container { background-color: #444; width: 100%; height: 10px; border-radius: 5px; margin-top: 5px; }
+        .progress-bar { height: 100%; border-radius: 5px; transition: width 0.3s; }
         
-        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+        /* MODAL */
+        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); }
+        .modal-content { background-color: #222; margin: 2% auto; padding: 20px; border: 1px solid #d4af37; width: 95%; max-width: 900px; height: 90%; overflow-y: auto; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        
+        .recruit-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #444; }
+        .recruit-info { flex: 2; min-width: 200px; }
+        .recruit-actions { flex: 3; text-align: right; min-width: 300px; }
+        .stars { color: #ffd700; letter-spacing: 2px; }
+
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } .recruit-row { display: block; } .recruit-actions { margin-top: 10px; text-align: left; } }
     </style>
 </head>
 <body>
@@ -53,7 +58,7 @@
 <div class="container">
     <div class="header">
         <h1>Dynasty Intercollegiate Conference</h1>
-        <div class="sub-header">EST. 2026 | Season 1</div>
+        <div class="sub-header">EST. 2026 | Week <span id="week-display">1</span></div>
         <div id="status-bar" style="margin-top: 15px; font-weight: bold;">
             <span id="user-team">Loading...</span> | 
             <span id="user-budget" style="color: #4caf50">...</span>
@@ -65,8 +70,8 @@
             <div class="card">
                 <h3>Head Coach Office</h3>
                 <p id="coach-info">Coach: You (Lvl 1)</p>
-                <button class="btn" onclick="simWeek()">Simulate Week</button>
-                <button class="btn btn-green" onclick="openRecruiting()">Open Recruiting Board</button>
+                <button class="btn" onclick="simWeek()">Simulate Week (Advance Time)</button>
+                <button class="btn btn-green" onclick="openRecruiting()">📞 Recruiting Board</button>
             </div>
 
             <div class="card" style="margin-top: 20px;">
@@ -95,15 +100,18 @@
 <div id="recruiting-modal" class="modal">
     <div class="modal-content">
         <span class="close" onclick="closeRecruiting()">&times;</span>
-        <h2 style="color: #d4af37; border-bottom: 2px solid #444; padding-bottom: 10px;">High School Recruiting Class</h2>
-        <p>Available Cap Space: <span id="modal-budget" style="color: #4caf50; font-weight: bold;">...</span></p>
+        <h2 style="color: #d4af37; border-bottom: 2px solid #444; padding-bottom: 10px;">Recruiting Class (Week <span id="modal-week">1</span>)</h2>
+        <div style="background: #333; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
+            Your Budget: <span id="modal-budget" style="color: #4caf50; font-weight: bold;">...</span> <br>
+            <span style="font-size: 0.8em; color: #aaa;">Interest decays every week you simulate! Get them to 100% to sign.</span>
+        </div>
         <div id="recruits-list">
             </div>
     </div>
 </div>
 
 <script>
-    /* --- GAME ENGINE V1.2 --- */
+    /* --- GAME ENGINE V1.3 --- */
 
     // CONFIGURATION
     const SCHOOL_NAMES = [
@@ -116,6 +124,7 @@
     // STATE
     let league = [];
     let recruits = [];
+    let currentWeek = 1;
     let userTeamIndex = 10; // Default to Dayton equivalent
 
     // DATA GENERATORS
@@ -135,7 +144,8 @@
         for(let i=0; i<13; i++) roster.push(generatePlayer(['Fr', 'So', 'Jr', 'Sr'][Math.floor(Math.random() * 4)], POSITIONS[i % 5]));
         roster.sort((a,b) => b.overall - a.overall);
 
-        let budget = tier === 1 ? 10000000 : (tier === 2 ? 3000000 : 750000);
+        // Budget: High tier = more money
+        let budget = tier === 1 ? 500000 : (tier === 2 ? 250000 : 75000);
         
         return {
             name: name,
@@ -150,29 +160,28 @@
     // RECRUIT GENERATOR
     function generateRecruitingClass() {
         recruits = [];
-        for(let i=0; i<15; i++) {
+        for(let i=0; i<20; i++) {
             let stars = Math.floor(Math.random() * 3) + 3; // 3 to 5 stars
             let rating = stars === 5 ? 90 + Math.floor(Math.random()*9) : (stars === 4 ? 80 + Math.floor(Math.random()*9) : 70 + Math.floor(Math.random()*9));
-            // Cost calculation: 5 stars are expensive!
-            let cost = stars === 5 ? 1500000 + Math.floor(Math.random()*1000000) : (stars === 4 ? 250000 + Math.floor(Math.random()*200000) : 25000 + Math.floor(Math.random()*50000));
-
+            
             recruits.push({
                 id: i,
-                name: `HS Star ${i+1}`,
+                name: `HS Prospect ${i+1}`,
                 position: POSITIONS[Math.floor(Math.random() * 5)],
                 stars: stars,
                 rating: rating,
-                cost: cost,
+                interest: Math.floor(Math.random() * 20), // Start with 0-20% interest
+                scouted: false,
                 signed: false
             });
         }
-        // Sort by rating
-        recruits.sort((a,b) => b.rating - a.rating);
+        recruits.sort((a,b) => b.stars - a.stars);
     }
 
     // INITIALIZATION
     function initGame() {
         league = [];
+        currentWeek = 1;
         SCHOOL_NAMES.forEach((name, index) => {
             let tier = index < 4 ? 1 : (index < 8 ? 2 : 3);
             league.push(createTeam(name, tier));
@@ -183,6 +192,10 @@
 
     // SIMULATION
     function simWeek() {
+        currentWeek++;
+        document.getElementById('week-display').innerText = currentWeek;
+
+        // Play Games
         league.forEach(team => {
             let strength = 0;
             team.roster.slice(0, 8).forEach(p => strength += p.overall); 
@@ -191,45 +204,81 @@
             if (performance > 75) team.wins++;
             else team.losses++;
         });
+
+        // Recruit Decay Logic (The "Rival" Simulation)
+        recruits.forEach(r => {
+            if(!r.signed) {
+                // Lose 2-5% interest per week if not signed (simulating other teams)
+                r.interest -= Math.floor(Math.random() * 4) + 1;
+                if(r.interest < 0) r.interest = 0;
+            }
+        });
+
         league.sort((a,b) => b.wins - a.wins);
         updateUI();
     }
 
-    // RECRUITING LOGIC
-    function openRecruiting() {
-        document.getElementById('recruiting-modal').style.display = 'block';
-        renderRecruits();
-    }
+    // RECRUITING ACTIONS
+    function recruitAction(id, actionType) {
+        let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
+        let recruit = recruits.find(r => r.id === id);
+        let cost = 0;
+        let interestGain = 0;
 
-    function closeRecruiting() {
-        document.getElementById('recruiting-modal').style.display = 'none';
-        updateUI(); // Refresh main screen in case budget changed
+        // Config
+        if(actionType === 'scout') { cost = 1000; }
+        if(actionType === 'call') { cost = 500; interestGain = 5; }
+        if(actionType === 'visit') { cost = 5000; interestGain = 15; }
+
+        if(userTeam.budget >= cost) {
+            userTeam.budget -= cost;
+            
+            if(actionType === 'scout') {
+                recruit.scouted = true;
+                alert(`Scouting Report: ${recruit.name} is a ${recruit.rating} Overall!`);
+            } else {
+                // Add Interest
+                recruit.interest += interestGain;
+                if(recruit.interest > 100) recruit.interest = 100;
+            }
+            
+            renderRecruits();
+            updateUI();
+        } else {
+            alert("Not enough budget!");
+        }
     }
 
     function signPlayer(id) {
         let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
         let recruit = recruits.find(r => r.id === id);
 
-        if(userTeam.budget >= recruit.cost) {
-            if(confirm(`Sign ${recruit.name} for $${recruit.cost.toLocaleString()}?`)) {
-                // Deduct money
-                userTeam.budget -= recruit.cost;
-                recruit.signed = true;
-                
-                // Add to roster (simulating them joining immediately for now for fun)
-                userTeam.roster.push({
-                    name: recruit.name,
-                    position: recruit.position,
-                    grade: 'Fr',
-                    overall: recruit.rating
-                });
-                
-                renderRecruits(); // Refresh list
-                updateUI(); // Refresh budget header
-            }
+        if(recruit.interest >= 100) {
+            recruit.signed = true;
+            userTeam.roster.push({
+                name: recruit.name,
+                position: recruit.position,
+                grade: 'Fr',
+                overall: recruit.rating
+            });
+            alert(`${recruit.name} has committed to your school!`);
+            renderRecruits();
+            updateUI();
         } else {
-            alert("Insufficient Funds! You need more NIL support.");
+            alert("Interest not high enough! Get to 100% first.");
         }
+    }
+
+    // UI RENDERING
+    function openRecruiting() {
+        document.getElementById('recruiting-modal').style.display = 'block';
+        document.getElementById('modal-week').innerText = currentWeek;
+        renderRecruits();
+    }
+
+    function closeRecruiting() {
+        document.getElementById('recruiting-modal').style.display = 'none';
+        updateUI();
     }
 
     function renderRecruits() {
@@ -240,33 +289,41 @@
         list.innerHTML = '';
 
         recruits.forEach(r => {
-            if(r.signed) return; // Hide signed players
-            
+            if(r.signed) return; 
+
             let starsDisplay = "★".repeat(r.stars);
-            let btnClass = userTeam.budget >= r.cost ? 'btn-green' : 'btn-red';
+            let ratingDisplay = r.scouted ? `<span style="color:#d4af37; font-weight:bold;">${r.rating} OVR</span>` : `<span style="color:#777;">?? OVR</span>`;
+            
+            // Color code the progress bar
+            let barColor = r.interest > 80 ? '#4caf50' : (r.interest > 40 ? '#ff9800' : '#f44336');
             
             let html = `
             <div class="recruit-row">
                 <div class="recruit-info">
                     <div style="font-weight:bold; font-size: 1.1em;">${r.name} <span class="stars">${starsDisplay}</span></div>
-                    <div style="color: #aaa;">${r.position} | OVR: ${r.rating}</div>
+                    <div>${r.position} | ${ratingDisplay}</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" style="width: ${r.interest}%; background-color: ${barColor};"></div>
+                    </div>
+                    <div style="font-size:0.8em; margin-top:2px;">Interest: ${r.interest}%</div>
                 </div>
-                <div style="text-align: right;">
-                    <div style="margin-bottom: 5px; color: #4caf50;">$${r.cost.toLocaleString()}</div>
-                    <button class="btn ${btnClass}" style="width: auto; padding: 5px 15px; font-size: 0.8em;" onclick="signPlayer(${r.id})">OFFER</button>
+                <div class="recruit-actions">
+                    ${!r.scouted ? `<button class="btn btn-sm btn-red" onclick="recruitAction(${r.id}, 'scout')">Scout ($1k)</button>` : ''}
+                    <button class="btn btn-sm btn-blue" onclick="recruitAction(${r.id}, 'call')">Call ($500)</button>
+                    <button class="btn btn-sm" onclick="recruitAction(${r.id}, 'visit')">Visit ($5k)</button>
+                    ${r.interest >= 100 ? `<button class="btn btn-sm btn-green" onclick="signPlayer(${r.id})">SIGN!</button>` : ''}
                 </div>
             </div>`;
             list.innerHTML += html;
         });
         
-        if(list.innerHTML === '') list.innerHTML = '<p style="text-align:center; padding:20px;">No recruits remaining.</p>';
+        if(list.innerHTML === '') list.innerHTML = '<p style="text-align:center;">No recruits remaining.</p>';
     }
 
-    // UI UPDATES
     function updateUI() {
         let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
         document.getElementById('user-team').innerText = userTeam.name;
-        document.getElementById('user-budget').innerText = `$${userTeam.budget.toLocaleString()} NIL`;
+        document.getElementById('user-budget').innerText = `$${userTeam.budget.toLocaleString()}`;
 
         const stdBody = document.getElementById('standings-body');
         stdBody.innerHTML = '';
@@ -282,7 +339,6 @@
 
         const rostBody = document.getElementById('roster-body');
         rostBody.innerHTML = '';
-        // Sort roster to show new signees if they are good
         userTeam.roster.sort((a,b) => b.overall - a.overall); 
         userTeam.roster.forEach(p => {
             let ratingClass = p.overall > 80 ? 'rating-high' : 'rating-low';
