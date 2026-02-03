@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dynasty Intercollegiate Conference</title>
     <style>
-        /* VISUAL DESIGN (CSS) */
+        /* --- VISUAL DESIGN (CSS) --- */
         body { font-family: 'Courier New', Courier, monospace; background: #1a1a1a; color: #f0f0f0; margin: 0; }
         .container { max-width: 900px; margin: 0 auto; padding: 20px; }
         
@@ -24,17 +24,27 @@
         /* BUTTONS */
         .btn { background: #d4af37; color: #111; width: 100%; padding: 12px; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; font-family: inherit;}
         .btn:hover { background: #fff; }
-        .btn-disabled { background: #444; color: #777; cursor: not-allowed; }
+        .btn-green { background: #4caf50; color: white; }
+        .btn-red { background: #f44336; color: white; }
 
         /* TABLES */
         table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
         th { text-align: left; color: #888; border-bottom: 1px solid #555; padding: 5px; }
         td { padding: 6px 5px; border-bottom: 1px solid #333; }
         .rank-num { color: #d4af37; font-weight: bold; }
-        .rating-high { color: #d4af37; }
-        .rating-low { color: #fff; }
+        .rating-high { color: #d4af37; } /* Gold for good ratings */
+        
+        /* MODAL (The Popup Screen) */
+        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); }
+        .modal-content { background-color: #222; margin: 5% auto; padding: 20px; border: 1px solid #d4af37; width: 90%; max-width: 800px; height: 80%; overflow-y: auto; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #fff; }
 
-        /* MOBILE FIX */
+        /* RECRUIT LIST */
+        .recruit-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #444; }
+        .recruit-info { flex-grow: 1; }
+        .stars { color: #ffd700; }
+        
         @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -56,7 +66,7 @@
                 <h3>Head Coach Office</h3>
                 <p id="coach-info">Coach: You (Lvl 1)</p>
                 <button class="btn" onclick="simWeek()">Simulate Week</button>
-                <button class="btn btn-disabled">Recruiting Board (Locked)</button>
+                <button class="btn btn-green" onclick="openRecruiting()">Open Recruiting Board</button>
             </div>
 
             <div class="card" style="margin-top: 20px;">
@@ -82,26 +92,38 @@
     </div>
 </div>
 
+<div id="recruiting-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeRecruiting()">&times;</span>
+        <h2 style="color: #d4af37; border-bottom: 2px solid #444; padding-bottom: 10px;">High School Recruiting Class</h2>
+        <p>Available Cap Space: <span id="modal-budget" style="color: #4caf50; font-weight: bold;">...</span></p>
+        <div id="recruits-list">
+            </div>
+    </div>
+</div>
+
 <script>
-    /* GAME ENGINE (JavaScript) */
+    /* --- GAME ENGINE V1.2 --- */
 
     // CONFIGURATION
     const SCHOOL_NAMES = [
-        "Duke Tech", "North Carolina A&M", "Kentucky State", "Kansas Plains", // Blue Bloods
-        "Michigan Lake", "UCLA Coast", "Indiana Hoops", "Villanova Catholic", // High Majors
-        "Gonzaga West", "Butler Bulldog", "Dayton Flyers", "Loyola Lake"      // Mid Majors
+        "Duke Tech", "North Carolina A&M", "Kentucky State", "Kansas Plains", 
+        "Michigan Lake", "UCLA Coast", "Indiana Hoops", "Villanova Catholic", 
+        "Gonzaga West", "Butler Bulldog", "Dayton Flyers", "Loyola Lake"
     ];
     const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'];
+    
+    // STATE
+    let league = [];
+    let recruits = [];
+    let userTeamIndex = 10; // Default to Dayton equivalent
 
     // DATA GENERATORS
-    function generatePlayer(position) {
-        const grades = ['Fr', 'So', 'Jr', 'Sr'];
-        let grade = grades[Math.floor(Math.random() * 4)];
+    function generatePlayer(grade, position) {
         let potential = Math.floor(Math.random() * 30) + 70; 
         let overall = potential - (Math.floor(Math.random() * 10) + 5); 
-        
         return {
-            name: `${['J', 'M', 'T', 'D', 'K'][Math.floor(Math.random()*5)]}. Player`,
+            name: `${['J', 'M', 'T', 'D', 'K'][Math.floor(Math.random()*5)]}. ${['Smith', 'Johnson', 'Williams', 'Brown', 'Jones'][Math.floor(Math.random()*5)]}`,
             position: position,
             grade: grade,
             overall: overall
@@ -110,10 +132,10 @@
 
     function createTeam(name, tier) {
         let roster = [];
-        for(let i=0; i<13; i++) roster.push(generatePlayer(POSITIONS[i % 5]));
+        for(let i=0; i<13; i++) roster.push(generatePlayer(['Fr', 'So', 'Jr', 'Sr'][Math.floor(Math.random() * 4)], POSITIONS[i % 5]));
         roster.sort((a,b) => b.overall - a.overall);
 
-        let budget = tier === 1 ? 10000000 : (tier === 2 ? 5000000 : 1000000);
+        let budget = tier === 1 ? 10000000 : (tier === 2 ? 3000000 : 750000);
         
         return {
             name: name,
@@ -125,8 +147,28 @@
         };
     }
 
-    // STATE
-    let league = [];
+    // RECRUIT GENERATOR
+    function generateRecruitingClass() {
+        recruits = [];
+        for(let i=0; i<15; i++) {
+            let stars = Math.floor(Math.random() * 3) + 3; // 3 to 5 stars
+            let rating = stars === 5 ? 90 + Math.floor(Math.random()*9) : (stars === 4 ? 80 + Math.floor(Math.random()*9) : 70 + Math.floor(Math.random()*9));
+            // Cost calculation: 5 stars are expensive!
+            let cost = stars === 5 ? 1500000 + Math.floor(Math.random()*1000000) : (stars === 4 ? 250000 + Math.floor(Math.random()*200000) : 25000 + Math.floor(Math.random()*50000));
+
+            recruits.push({
+                id: i,
+                name: `HS Star ${i+1}`,
+                position: POSITIONS[Math.floor(Math.random() * 5)],
+                stars: stars,
+                rating: rating,
+                cost: cost,
+                signed: false
+            });
+        }
+        // Sort by rating
+        recruits.sort((a,b) => b.rating - a.rating);
+    }
 
     // INITIALIZATION
     function initGame() {
@@ -135,39 +177,97 @@
             let tier = index < 4 ? 1 : (index < 8 ? 2 : 3);
             league.push(createTeam(name, tier));
         });
+        generateRecruitingClass();
         updateUI();
     }
 
-    // SIMULATION LOGIC
+    // SIMULATION
     function simWeek() {
         league.forEach(team => {
-            // Calculate Team Strength (Top 8 players)
             let strength = 0;
             team.roster.slice(0, 8).forEach(p => strength += p.overall); 
             strength = strength / 8; 
-            
-            // Random Game Variance
             let performance = strength + Math.floor(Math.random() * 20) - 10;
-            
-            // Simple Win/Loss Check (Threshold 75)
             if (performance > 75) team.wins++;
             else team.losses++;
         });
-
-        // Sort Standings
         league.sort((a,b) => b.wins - a.wins);
         updateUI();
     }
 
+    // RECRUITING LOGIC
+    function openRecruiting() {
+        document.getElementById('recruiting-modal').style.display = 'block';
+        renderRecruits();
+    }
+
+    function closeRecruiting() {
+        document.getElementById('recruiting-modal').style.display = 'none';
+        updateUI(); // Refresh main screen in case budget changed
+    }
+
+    function signPlayer(id) {
+        let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
+        let recruit = recruits.find(r => r.id === id);
+
+        if(userTeam.budget >= recruit.cost) {
+            if(confirm(`Sign ${recruit.name} for $${recruit.cost.toLocaleString()}?`)) {
+                // Deduct money
+                userTeam.budget -= recruit.cost;
+                recruit.signed = true;
+                
+                // Add to roster (simulating them joining immediately for now for fun)
+                userTeam.roster.push({
+                    name: recruit.name,
+                    position: recruit.position,
+                    grade: 'Fr',
+                    overall: recruit.rating
+                });
+                
+                renderRecruits(); // Refresh list
+                updateUI(); // Refresh budget header
+            }
+        } else {
+            alert("Insufficient Funds! You need more NIL support.");
+        }
+    }
+
+    function renderRecruits() {
+        let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
+        document.getElementById('modal-budget').innerText = `$${userTeam.budget.toLocaleString()}`;
+        
+        let list = document.getElementById('recruits-list');
+        list.innerHTML = '';
+
+        recruits.forEach(r => {
+            if(r.signed) return; // Hide signed players
+            
+            let starsDisplay = "★".repeat(r.stars);
+            let btnClass = userTeam.budget >= r.cost ? 'btn-green' : 'btn-red';
+            
+            let html = `
+            <div class="recruit-row">
+                <div class="recruit-info">
+                    <div style="font-weight:bold; font-size: 1.1em;">${r.name} <span class="stars">${starsDisplay}</span></div>
+                    <div style="color: #aaa;">${r.position} | OVR: ${r.rating}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="margin-bottom: 5px; color: #4caf50;">$${r.cost.toLocaleString()}</div>
+                    <button class="btn ${btnClass}" style="width: auto; padding: 5px 15px; font-size: 0.8em;" onclick="signPlayer(${r.id})">OFFER</button>
+                </div>
+            </div>`;
+            list.innerHTML += html;
+        });
+        
+        if(list.innerHTML === '') list.innerHTML = '<p style="text-align:center; padding:20px;">No recruits remaining.</p>';
+    }
+
     // UI UPDATES
     function updateUI() {
-        // Find User Team (Hardcoded to Index 10 - Dayton Equivalent)
-        let userTeam = league.find(t => t.name === SCHOOL_NAMES[10]); 
-        
+        let userTeam = league.find(t => t.name === SCHOOL_NAMES[userTeamIndex]);
         document.getElementById('user-team').innerText = userTeam.name;
         document.getElementById('user-budget').innerText = `$${userTeam.budget.toLocaleString()} NIL`;
 
-        // Render Standings
         const stdBody = document.getElementById('standings-body');
         stdBody.innerHTML = '';
         league.forEach((team, index) => {
@@ -180,9 +280,10 @@
             stdBody.innerHTML += row;
         });
 
-        // Render Roster
         const rostBody = document.getElementById('roster-body');
         rostBody.innerHTML = '';
+        // Sort roster to show new signees if they are good
+        userTeam.roster.sort((a,b) => b.overall - a.overall); 
         userTeam.roster.forEach(p => {
             let ratingClass = p.overall > 80 ? 'rating-high' : 'rating-low';
             let row = `<tr>
@@ -195,7 +296,6 @@
         });
     }
 
-    // Start the Game
     initGame();
 </script>
 
