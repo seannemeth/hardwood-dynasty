@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynasty Intercollegiate Conference</title>
+    <style>
+        /* VISUAL DESIGN (CSS) */
+        body { font-family: 'Courier New', Courier, monospace; background: #1a1a1a; color: #f0f0f0; margin: 0; }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+        
+        /* HEADER */
+        .header { border-bottom: 3px solid #d4af37; padding-bottom: 15px; margin-bottom: 25px; text-align: center; }
+        .header h1 { margin: 0; font-size: 2.5em; letter-spacing: 2px; text-transform: uppercase; color: #d4af37; }
+        .sub-header { color: #888; font-size: 0.9em; margin-top: 5px; }
+
+        /* GRID LAYOUT */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        
+        /* CARDS */
+        .card { background: #2a2a2a; padding: 15px; border-radius: 8px; border: 1px solid #444; }
+        .card h3 { margin-top: 0; color: #d4af37; border-bottom: 1px solid #444; padding-bottom: 5px;}
+        
+        /* BUTTONS */
+        .btn { background: #d4af37; color: #111; width: 100%; padding: 12px; border: none; font-weight: bold; cursor: pointer; margin-bottom: 5px; font-family: inherit;}
+        .btn:hover { background: #fff; }
+        .btn-disabled { background: #444; color: #777; cursor: not-allowed; }
+
+        /* TABLES */
+        table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+        th { text-align: left; color: #888; border-bottom: 1px solid #555; padding: 5px; }
+        td { padding: 6px 5px; border-bottom: 1px solid #333; }
+        .rank-num { color: #d4af37; font-weight: bold; }
+        .rating-high { color: #d4af37; }
+        .rating-low { color: #fff; }
+
+        /* MOBILE FIX */
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Dynasty Intercollegiate Conference</h1>
+        <div class="sub-header">EST. 2026 | Season 1</div>
+        <div id="status-bar" style="margin-top: 15px; font-weight: bold;">
+            <span id="user-team">Loading...</span> | 
+            <span id="user-budget" style="color: #4caf50">...</span>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div>
+            <div class="card">
+                <h3>Head Coach Office</h3>
+                <p id="coach-info">Coach: You (Lvl 1)</p>
+                <button class="btn" onclick="simWeek()">Simulate Week</button>
+                <button class="btn btn-disabled">Recruiting Board (Locked)</button>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <h3>Conference Standings</h3>
+                <table id="standings-table">
+                    <thead>
+                        <tr><th>Rk</th><th>School</th><th>Tier</th><th>W-L</th></tr>
+                    </thead>
+                    <tbody id="standings-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Active Roster</h3>
+            <table id="roster-table">
+                <thead>
+                    <tr><th>Pos</th><th>Name</th><th>Yr</th><th>OVR</th></tr>
+                </thead>
+                <tbody id="roster-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* GAME ENGINE (JavaScript) */
+
+    // CONFIGURATION
+    const SCHOOL_NAMES = [
+        "Duke Tech", "North Carolina A&M", "Kentucky State", "Kansas Plains", // Blue Bloods
+        "Michigan Lake", "UCLA Coast", "Indiana Hoops", "Villanova Catholic", // High Majors
+        "Gonzaga West", "Butler Bulldog", "Dayton Flyers", "Loyola Lake"      // Mid Majors
+    ];
+    const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'];
+
+    // DATA GENERATORS
+    function generatePlayer(position) {
+        const grades = ['Fr', 'So', 'Jr', 'Sr'];
+        let grade = grades[Math.floor(Math.random() * 4)];
+        let potential = Math.floor(Math.random() * 30) + 70; 
+        let overall = potential - (Math.floor(Math.random() * 10) + 5); 
+        
+        return {
+            name: `${['J', 'M', 'T', 'D', 'K'][Math.floor(Math.random()*5)]}. Player`,
+            position: position,
+            grade: grade,
+            overall: overall
+        };
+    }
+
+    function createTeam(name, tier) {
+        let roster = [];
+        for(let i=0; i<13; i++) roster.push(generatePlayer(POSITIONS[i % 5]));
+        roster.sort((a,b) => b.overall - a.overall);
+
+        let budget = tier === 1 ? 10000000 : (tier === 2 ? 5000000 : 1000000);
+        
+        return {
+            name: name,
+            tier: tier, 
+            budget: budget,
+            wins: 0,
+            losses: 0,
+            roster: roster
+        };
+    }
+
+    // STATE
+    let league = [];
+
+    // INITIALIZATION
+    function initGame() {
+        league = [];
+        SCHOOL_NAMES.forEach((name, index) => {
+            let tier = index < 4 ? 1 : (index < 8 ? 2 : 3);
+            league.push(createTeam(name, tier));
+        });
+        updateUI();
+    }
+
+    // SIMULATION LOGIC
+    function simWeek() {
+        league.forEach(team => {
+            // Calculate Team Strength (Top 8 players)
+            let strength = 0;
+            team.roster.slice(0, 8).forEach(p => strength += p.overall); 
+            strength = strength / 8; 
+            
+            // Random Game Variance
+            let performance = strength + Math.floor(Math.random() * 20) - 10;
+            
+            // Simple Win/Loss Check (Threshold 75)
+            if (performance > 75) team.wins++;
+            else team.losses++;
+        });
+
+        // Sort Standings
+        league.sort((a,b) => b.wins - a.wins);
+        updateUI();
+    }
+
+    // UI UPDATES
+    function updateUI() {
+        // Find User Team (Hardcoded to Index 10 - Dayton Equivalent)
+        let userTeam = league.find(t => t.name === SCHOOL_NAMES[10]); 
+        
+        document.getElementById('user-team').innerText = userTeam.name;
+        document.getElementById('user-budget').innerText = `$${userTeam.budget.toLocaleString()} NIL`;
+
+        // Render Standings
+        const stdBody = document.getElementById('standings-body');
+        stdBody.innerHTML = '';
+        league.forEach((team, index) => {
+            let row = `<tr>
+                <td class="rank-num">${index + 1}</td>
+                <td>${team.name}</td>
+                <td>${team.tier === 1 ? 'High' : (team.tier === 2 ? 'Mid' : 'Low')}</td>
+                <td>${team.wins}-${team.losses}</td>
+            </tr>`;
+            stdBody.innerHTML += row;
+        });
+
+        // Render Roster
+        const rostBody = document.getElementById('roster-body');
+        rostBody.innerHTML = '';
+        userTeam.roster.forEach(p => {
+            let ratingClass = p.overall > 80 ? 'rating-high' : 'rating-low';
+            let row = `<tr>
+                <td>${p.position}</td>
+                <td>${p.name}</td>
+                <td>${p.grade}</td>
+                <td class="${ratingClass}">${p.overall}</td>
+            </tr>`;
+            rostBody.innerHTML += row;
+        });
+    }
+
+    // Start the Game
+    initGame();
+</script>
+
+</body>
+</html>
